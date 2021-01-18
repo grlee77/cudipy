@@ -27,6 +27,8 @@ from dipy.io.image import load_nifti_data
 
 from cudipy.segment.tissue import TissueClassifierHMRF
 
+compare_cpu = True
+
 """
 First we fetch the T1 volume from the Syn dataset and determine its shape.
 """
@@ -81,17 +83,33 @@ After setting the necessary parameters we can now call an instance of the class
 "TissueClassifierHMRF" and its method called "classify" and input the
 parameters defined above to perform the segmentation task.
 """
-t0 = time.time()
+tstart = time.time()
 
 hmrf = TissueClassifierHMRF()
 t1_gpu = cp.asarray(t1)
+print(f"t1.dtype = {t1.dtype}")
+
 initial_segmentation, final_segmentation, PVE = hmrf.classify(
-    t1_gpu, nclass, beta, #max_iter=20,
+    t1_gpu, nclass, beta, max_iter=20,
 )
 
-t1 = time.time()
-total_time = t1 - t0
-print('Total time (Classification):' + str(total_time))
+total_time = time.time() - tstart
+print('Total time (Classification): ' + str(total_time))
+
+if compare_cpu:
+   from dipy.segment.tissue import (
+      TissueClassifierHMRF as TissueClassifierHMRF_cpu
+   )
+   tstart = time.time()
+
+   hmrf = TissueClassifierHMRF_cpu()
+   initial_segmentation, final_segmentation, PVE = hmrf.classify(
+       t1, nclass, beta, max_iter=20,
+   )
+
+   total_time_cpu = time.time() - tstart
+   print('Total time (Classification): ' + str(total_time_cpu))
+   print(f'GPU acceleration factor = {total_time_cpu/total_time}')
 
 final_segmentation = cp.asnumpy(final_segmentation)
 PVE = cp.asnumpy(PVE)

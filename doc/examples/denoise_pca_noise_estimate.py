@@ -13,6 +13,8 @@ from dipy.io.gradients import read_bvals_bvecs
 
 from cudipy.denoise.pca_noise_estimate import pca_noise_estimate
 
+compare_cpu = True
+
 """
 
 Load one of the datasets. These data were acquired with 63 gradients and 1
@@ -47,4 +49,15 @@ data = cp.asarray(data)
 
 t = time()
 sigma = pca_noise_estimate(data, gtab, correct_bias=True, smooth=3)
-print("Sigma estimation time", time() - t)
+dur = time() - t
+print(f"Sigma estimation time: {dur} s")
+
+if compare_cpu:
+    from dipy.denoise.pca_noise_estimate import pca_noise_estimate as pca_cpu
+
+    data_cpu = cp.asnumpy(data)
+    t = time()
+    sigma = pca_cpu(data_cpu, gtab, correct_bias=True, smooth=3)
+    dur_cpu = time() - t
+    print(f"Sigma estimation time (CPU): {dur_cpu} s")
+    print(f"Acceleration (CPU) = {dur_cpu/dur:0.4f}")

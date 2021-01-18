@@ -28,13 +28,13 @@ HARDI dataset
 """
 
 compare_cpu = True
+from cupyimg.skimage.transform import rescale
 
 hardi_fname, hardi_bval_fname, hardi_bvec_fname = get_fnames("stanford_hardi")
 
 stanford_b0, stanford_b0_affine = load_nifti(hardi_fname)
 stanford_b0 = np.squeeze(stanford_b0)[..., 0]
 stanford_b0 = cp.asarray(stanford_b0)
-
 
 """
 The second one will be the same b0 we used for the 2D registration tutorial
@@ -48,14 +48,13 @@ syn_b0 = cp.asarray(syn_b0)
 We first remove the skull from the b0's
 """
 
+otsu_kwargs = dict(median_radius=3, numpass=4)
 
 tstart = time.time()
-stanford_b0_masked, stanford_b0_mask = median_otsu(
-    stanford_b0, median_radius=3, numpass=4
-)
+stanford_b0_masked, stanford_b0_mask = median_otsu(stanford_b0, **otsu_kwargs)
 print("median_otsu duration = {} s".format(time.time() - tstart))
 tstart = time.time()
-syn_b0_masked, syn_b0_mask = median_otsu(syn_b0, median_radius=3, numpass=4)
+syn_b0_masked, syn_b0_mask = median_otsu(syn_b0, **otsu_kwargs)
 otsu_dur = time.time() - tstart
 print(f"median_otsu duration2 = {otsu_dur} s")
 
@@ -63,7 +62,7 @@ if compare_cpu:
     from dipy.segment.mask import median_otsu as median_otsu_cpu
     syn_b0_cpu = cp.asnumpy(syn_b0)
     tstart = time.time()
-    syn_b0_masked_cpu, syn_b0_mask_cpu = median_otsu_cpu(syn_b0_cpu, median_radius=3, numpass=4)
+    syn_b0_masked_cpu, syn_b0_mask_cpu = median_otsu_cpu(syn_b0_cpu, **otsu_kwargs)
     otsu_dur_cpu = time.time() - tstart
     print(f"median_otsu duration (CPU) = {otsu_dur_cpu} s")
     print(f"Acceleration (median_otsu) = {otsu_dur_cpu / otsu_dur} s")
@@ -74,19 +73,80 @@ static_affine = stanford_b0_affine
 moving = syn_b0_masked
 moving_affine = syn_b0_affine
 
+
+static_affine[:3, :3] = np.eye(3)
+moving_affine[:3, :3] = np.eye(3)
+static = rescale(static, 2.0, order=3)
+moving = rescale(moving, 2.0, order=3)
+
+
+if False:
+    from dipy.align.imaffine import (transform_centers_of_mass,
+                                     AffineMap,
+                                     MutualInformationMetric,
+                                     AffineRegistration)
+    from dipy.align.transforms import (TranslationTransform3D,
+                                       RigidTransform3D,
+                                       AffineTransform3D)
+
+    static_cpu = cp.asnumpy(static)
+    moving_cpu = cp.asnumpy(moving)
+    c_of_mass = transform_centers_of_mass(static_cpu, static_affine,
+                                          moving_cpu, moving_affine)
+
+    transformed = c_of_mass.transform(moving_cpu)
+    nbins = 32
+    sampling_prop = None
+    metric = MutualInformationMetric(nbins, sampling_prop)
+    level_iters = [200, 200, 50]
+    sigmas = [3.0, 1.0, 0.0]
+    factors = [4, 2, 1]
+    affreg = AffineRegistration(metric=metric,
+                                level_iters=level_iters,
+                                sigmas=sigmas,
+                                factors=factors)
+    transform = TranslationTransform3D()
+    params0 = None
+    starting_affine = c_of_mass.affine
+    translation = affreg.optimize(static_cpu, moving_cpu, transform, params0,
+                                  static_affine, moving_affine,
+                                  starting_affine=starting_affine)
+
+    transform = RigidTransform3D()
+    params0 = None
+    starting_affine = translation.affine
+    rigid = affreg.optimize(static_cpu, moving_cpu, transform, params0,
+                            static_affine, moving_affine,
+                            starting_affine=starting_affine)
+
+    transform = AffineTransform3D()
+    params0 = None
+    starting_affine = rigid.affine
+    affine = affreg.optimize(static_cpu, moving_cpu, transform, params0,
+                             static_affine, moving_affine,
+                             starting_affine=starting_affine)
+
 """
 Suppose we have already done a linear registration to roughly align the two
 images
 """
 
-pre_align = np.array(
-    [
-        [1.02783543e00, -4.83019053e-02, -6.07735639e-02, -2.57654118e00],
-        [4.34051706e-03, 9.41918267e-01, -2.66525861e-01, 3.23579799e01],
-        [5.34288908e-02, 2.90262026e-01, 9.80820307e-01, -1.46216651e01],
-        [0.00000000e00, 0.00000000e00, 0.00000000e00, 1.00000000e00],
-    ]
-)
+# pre_align = np.array(
+#     [
+#         [1.02783543e00, -4.83019053e-02, -6.07735639e-02, -2.57654118e00],
+#         [4.34051706e-03, 9.41918267e-01, -2.66525861e-01, 3.23579799e01],
+#         [5.34288908e-02, 2.90262026e-01, 9.80820307e-01, -1.46216651e01],
+#         [0.00000000e00, 0.00000000e00, 0.00000000e00, 1.00000000e00],
+#     ]
+# )
+pre_align = np.array([[ 1.00425556e+00, -5.96465910e-02,  4.36216002e-02,
+         2.52609966e+02],
+       [-1.39283606e-02,  9.24949398e-01, -2.43540019e-01,
+         3.04824663e+01],
+       [-2.30582804e-02,  3.13353555e-01,  1.00487484e+00,
+        -1.62915090e+01],
+       [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,
+         1.00000000e+00]])
 
 """
 As we did in the 2D example, we would like to visualize (some slices of) the
@@ -154,11 +214,6 @@ that can be used to register images back and forth between the static and
 moving domains. We provide the pre-aligning matrix that brings the moving
 image closer to the static image
 """
-
-if compare_cpu:
-    # dry run to make sure GPU kernels have been compiled
-    mapping = sdr.optimize(static, moving, static_affine, moving_affine, pre_align)
-
 
 tstart = time.time()
 mapping = sdr.optimize(static, moving, static_affine, moving_affine, pre_align)

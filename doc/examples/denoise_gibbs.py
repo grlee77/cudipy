@@ -41,7 +41,7 @@ from dipy.io.image import load_nifti_data
 We first apply this algorithm to T1-weighted dataset which can be fetched
 using the following code:
 """
-
+compare_cpu = True
 
 t1_fname, t1_denoised_fname, ap_fname = get_fnames("tissue_data")
 t1 = load_nifti_data(t1_denoised_fname)
@@ -207,9 +207,19 @@ can be performed in the following way:
 
 tstart = time.time()
 data_corrected = gibbs_removal(data_slices, slice_axis=2)
-print("Gibbs removal duration = {} s".format(time.time() - tstart))
+dur_gibbs_3d = time.time() - tstart
+print(f"Gibbs removal duration = {dur_gibbs_3d} s")
 data_corrected = cp.asnumpy(data_corrected)
 
+if compare_cpu:
+    from dipy.denoise.gibbs import gibbs_removal as gibbs_removal_cpu
+
+    data_slices_cpu = cp.asnumpy(data_slices)
+    tstart = time.time()
+    data_corrected_cpu = gibbs_removal_cpu(data_slices_cpu, slice_axis=2, num_threads=10)
+    dur_gibbs_3d_cpu = time.time() - tstart
+    print(f"Gibbs removal duration (CPU) = {dur_gibbs_3d_cpu} s")
+    print(f"GPU Acceleration (Gibbs 3D) = {dur_gibbs_3d_cpu / dur_gibbs_3d}")
 
 # print(cupy.fft.config.get_plan_cache())
 

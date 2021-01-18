@@ -29,6 +29,9 @@ data_fnames = get_fnames('scil_b0')
 data, affine = load_nifti(data_fnames[1])
 data = np.squeeze(data)
 data = cp.asarray(data)
+print(f"data.shape = {data.shape}")
+
+compare_cpu = True
 
 """
 Segment the brain using DIPY's ``mask`` module.
@@ -41,9 +44,22 @@ we used 2 as ``median_radius`` and 1 as ``num_pass``
 """
 tstart = time.time()
 b0_mask, mask = median_otsu(data, median_radius=2, numpass=1)
-print('duration median_otsu = {} s'.format(time.time() - tstart))
+dur = time.time() - tstart
+print(f'duration median_otsu = {dur} s')
 b0_mask = cp.asnumpy(b0_mask)
 mask = cp.asnumpy(mask)
+
+if compare_cpu:
+    from dipy.segment.mask import median_otsu as median_otsu_cpu
+
+    data_cpu = cp.asnumpy(data)
+    tstart = time.time()
+    b0_mask_cpu, mask_cpu = median_otsu_cpu(data_cpu, median_radius=2, numpass=1)
+    dur_cpu = time.time() - tstart
+    print(f'duration median_otsu (CPU) = {dur_cpu} s')
+    print(f'Acceleration (CPU) = {dur_cpu/dur:0.4f}')
+
+
 """
 Saving the segmentation results is very easy. We need the ``b0_mask``, and the
 binary mask volumes. The affine matrix which transform the image's coordinates
@@ -92,9 +108,37 @@ smaller. Auto-cropping in ``median_otsu`` is activated by setting the
 tstart = time.time()
 b0_mask_crop, mask_crop = median_otsu(data, median_radius=4, numpass=4,
                                       autocrop=True)
-print('duration median_otsu = {} s'.format(time.time() - tstart))
+dur = time.time() - tstart
+print(f'duration median_otsu = {dur} s')
 b0_mask_crop = cp.asnumpy(b0_mask_crop)
 mask_crop = cp.asnumpy(mask_crop)
+
+
+if compare_cpu:
+    data_cpu = cp.asnumpy(data)
+    tstart = time.time()
+    b0_mask_crop_cpu, mask_crop_cpu = median_otsu_cpu(
+        data_cpu, median_radius=4, numpass=4, autocrop=True
+    )
+    dur_cpu = time.time() - tstart
+    print(f'duration median_otsu (CPU) = {dur_cpu} s')
+    print(f'Acceleration (CPU) = {dur_cpu/dur:0.4f}')
+
+
+plt.figure('Brain segmentation2')
+plt.subplot(1, 2, 1).set_axis_off()
+plt.imshow(
+    histeq(cp.asnumpy(data[:, :, sli]).astype('float')).T,
+    cmap='gray', origin='lower',
+)
+
+plt.subplot(1, 2, 2).set_axis_off()
+plt.imshow(histeq(b0_mask_crop[:, :, sli].astype('float')).T,
+           cmap='gray', origin='lower'
+)
+
+plt.savefig('median_otsu2.png')
+
 """
 Saving cropped data using nibabel as demonstrated previously.
 
