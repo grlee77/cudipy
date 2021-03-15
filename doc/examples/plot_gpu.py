@@ -14,6 +14,9 @@ labels = ['SyN\n(2mm iso)',
 gpu_means = [0.61, 3.22, 0.52, 3.11, 2.13]
 cpu_means = [9.37, 69.1, 10.6, 6.32, 93.3]
 
+qgpu_means = [0.52, 2.46, 0.268, 1.45, 2.34]
+qcpu_means = [8.66, 127.9, 12.3, 8.95, 514]
+
 x = np.arange(len(labels))  # the label locations
 width = 0.35  # the width of the bars
 
